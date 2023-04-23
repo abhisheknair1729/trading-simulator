@@ -1,7 +1,8 @@
 package market;
 import java.util.*;
+import java.lang.Math.*;
 
-public class Client {
+public class Client implements Runnable {
 	
 	private Map<String, Double> quantity; 
 	private int id;
@@ -14,6 +15,8 @@ public class Client {
 	private Map<Integer, Order> completed_orders;
 	
 	private Exchange ex;
+    
+    public Thread t;
 
 	public Client(Map quantity, double money){	
 		this.id = next_id++;
@@ -47,23 +50,23 @@ public class Client {
 		this.completed_orders = null;
 	}
 	
-	public void setExchange( Exchange ex ){
+	public synchronized void setExchange( Exchange ex ){
 		this.ex = ex;
 	}
 
-	public Exchange getExchange(){
+	public synchronized Exchange getExchange(){
 		return this.ex;
 	}
 
-	public void addFunds( double funds ){
+	public synchronized void addFunds( double funds ){
 		this.money += funds;
 	}
 	
-	public double viewFunds(){
+	public synchronized double viewFunds(){
 		return money;
 	}
 	
-	public void printInfo(){
+	public synchronized void printInfo(){
 		System.out.println("Client " + id + " has the following holdings");
 		System.out.println("Cash: " + money);
 		List<String> equities = new ArrayList<String>(quantity.keySet());
@@ -72,15 +75,16 @@ public class Client {
 		}
 	}
 
-	public Order createOrder( OrderType type, String ticker, double quantity, double price ){
+	public synchronized Order createOrder( OrderType type, String ticker, double quantity, double price ){
 		
 		double cost = price*quantity;
 		Order o = new Order( order_id++, type, ticker, quantity, cost, price );
 		
+        try{
 		if( type == OrderType.sell ){
 			if( this.quantity.get(ticker) < quantity ){
 				System.out.println("Cannot issue sell order because of"
-						+ "insufficient holdings\n");
+						+ " insufficient holdings\n");
 				order_id--;
 				return null;
 			}else{	
@@ -92,20 +96,24 @@ public class Client {
 		if( type == OrderType.buy ){
 			if( this.money < cost ){
 				System.out.println("Cannot issue buy order because of"
-						+ "insufficient funds\n");
+						+ " insufficient funds\n");
 				order_id--;
 				return null;
 			}else{
 				this.money -= cost;
 			}
 		}
+        }
+        catch (Exception e){
+            return null;
+        }
 		
 		pending_orders.put(o.order_id, o);	
 		return o;
 	}
 	
 	// return status value
-	public boolean updateOrderStatus( OrderStatus os ){
+	public synchronized boolean updateOrderStatus( OrderStatus os ){
 		Order o = pending_orders.get(os.order_id);
 		if(os.status == true){
 			completed_orders.put( os.order_id, pending_orders.get(os.order_id) );
@@ -135,6 +143,38 @@ public class Client {
 		
 		return os.status;
 	}
+    
+    public void generate_random_orders(){
+        
+        int i;
+        
+        for(i=0; i<100; i++){
+            
+            OrderType type = Math.random()<0.5?OrderType.buy:OrderType.sell;            
+            
+            double price = Math.random()<0.5?10:11;
+            double quantity = Math.random()<0.5?5:15;
+
+            String ticker = Math.random()<0.5?"ABC":"XYZ";
+            
+            Order o = createOrder(type, ticker, quantity, price);
+            if( o!= null )
+                ex.addOrder(o, this);
+        }
+
+    }
+
+    public void run() {
+        generate_random_orders();
+    }
+
+    public void start() {
+        if( t == null ){
+            t = new Thread(this, "Client " + Integer.toString(id));
+            t.start();
+        }
+    }
+
 }
 			
 

@@ -5,7 +5,7 @@ public class Exchange{
 	
 	private Map<String, Double> prices;
 	private Map<String, List<ExchangeOrder>> order_list;
-	private static int exchange_order_id = 0;
+	private static int exchange_order_count = 0;
 
 	public Exchange(){
 		prices = new HashMap<String, Double>();
@@ -24,11 +24,11 @@ public class Exchange{
 		order_list = null;
 	}
 
-	public double getCurrentPrice(String ticker){
+	public synchronized double getCurrentPrice(String ticker){
 		return prices.get(ticker);
 	}
 
-	public void addOrder(Order o, Client c){
+	public synchronized void addOrder(Order o, Client c){
 		ExchangeOrder exo = new ExchangeOrder(o, c);
 		String ticker = exo.order.ticker;
 		int i = 0;
@@ -46,7 +46,8 @@ public class Exchange{
 							prices.put(ticker, os_tmp.price);
 							exo.client.updateOrderStatus(os_exo);
 							tmp.client.updateOrderStatus(os_tmp);
-							break;
+							exchange_order_count++;
+                            break;
 						}
 					} else{
 						if(exo.order.price <= tmp.order.price){
@@ -55,6 +56,7 @@ public class Exchange{
 							prices.put(ticker, os_exo.price);
 							exo.client.updateOrderStatus(os_exo);
 							tmp.client.updateOrderStatus(os_tmp);
+                            exchange_order_count++;
 							break;
 						}
 					}
@@ -69,8 +71,9 @@ public class Exchange{
 		}
 	}
 
-	public void closeOfDay(){
-		exchange_order_id = 0;
+	public synchronized void closeOfDay(){
+		System.out.println("Completed " + Integer.toString(exchange_order_count) + " orders today");
+        exchange_order_count = 0;
 		
 		for(String s: order_list.keySet())
 		for(int i=0; i<order_list.get(s).size(); i++){
